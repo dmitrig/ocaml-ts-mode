@@ -1,0 +1,3 @@
+*.elc
+ocaml-ts-mode-autoloads.el
+ocaml-ts-mode-pkg.el
