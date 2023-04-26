@@ -41,9 +41,21 @@
   :safe 'integerp
   :group 'ocaml)
 
-(defvar ocaml-ts-mode--syntax-table
-  (let ((table (make-syntax-table)))
-    table)
+(defvar ocaml-ts-mode--syntax-table     ; adapted from tuareg.el
+  (let ((st (make-syntax-table)))
+    (modify-syntax-entry ?_ "_" st)
+    (modify-syntax-entry ?' "_" st)     ; ' is part of symbols
+    (modify-syntax-entry ?. "'" st)     ; qualified ids are a single symbol
+    (dolist (c '(?# ?` ?! ?$ ?% ?& ?+ ?- ?/ ?: ?< ?= ?> ?@ ?^ ?|))
+      (modify-syntax-entry c "." st))
+    (modify-syntax-entry ?? ". p" st)   ; label prefix chars
+    (modify-syntax-entry ?~ ". p" st)
+    (modify-syntax-entry ?\" "\"" st)   ; string delimiter
+    (modify-syntax-entry ?\\ "\\" st)   ; escape char
+    (modify-syntax-entry ?*  ". 23" st) ; comment delimiters
+    (modify-syntax-entry ?\( "()1n" st)
+    (modify-syntax-entry ?\) ")(4n" st)
+    st)
   "Syntax table for `ocaml-ts-mode'.")
 
 (defvar ocaml-ts-mode--indent-rules
@@ -163,7 +175,9 @@
 
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
-  "A mode for OCaml programming language."
+  "Major mode for editing OCaml, powered by tree-sitter."
+  :group 'ocaml
+  :syntax-table ocaml-ts-mode--syntax-table
 
   (unless (treesit-ready-p 'ocaml)
     (error "Tree-sitter for OCaml isn't available"))
@@ -195,7 +209,9 @@
 
 ;;;###autoload
 (define-derived-mode ocamli-ts-mode prog-mode "OCaml[mli]"
-  "A mode for the OCaml programming language."
+  "Major mode for editing OCaml, powered by tree-sitter."
+  :group 'ocaml
+  :syntax-table ocaml-ts-mode--syntax-table
 
   (unless (treesit-ready-p 'ocaml-interface)
     (error "Tree-sitter for OCaml isn't available"))
