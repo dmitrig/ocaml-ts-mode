@@ -173,6 +173,26 @@
      (module_name) @font-lock-type-face
      (module_type_name) @font-lock-type-face)))
 
+(defvar ocaml-ts-mode--defun-type-regexp
+  (regexp-opt '("type_definition"
+                "value_definition"
+                "value_specification"
+                "module_definition"
+                "module_type_definition"
+                "class_definition"
+                "class_type_definition"
+                "method_definition"
+                "method_specification"
+                "instance_variable_definition"
+                "instance_variable_specification"
+                "external"))
+  "Regex used to fund defun-like nodes.")
+
+(defun ocaml-ts-mode--defun-pred (node)
+  "Predicate to check if NODE is really defun-like."
+  (not (string-equal (treesit-node-type (treesit-node-parent node))
+                     "let_expression")))
+
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
   "Major mode for editing OCaml, powered by tree-sitter."
@@ -191,7 +211,9 @@
   (setq-local treesit-simple-indent-rules ocaml-ts-mode--indent-rules)
 
   ;; Navigation.
-  (setq-local treesit-defun-type-regexp nil)
+  (setq-local treesit-defun-type-regexp
+              (cons ocaml-ts-mode--defun-type-regexp
+                    #'ocaml-ts-mode--defun-pred))
   (setq-local treesit-defun-name-function nil)
 
   ;; Font-lock.
@@ -225,7 +247,9 @@
   (setq-local treesit-simple-indent-rules nil)
 
   ;; Navigation.
-  (setq-local treesit-defun-type-regexp nil)
+  (setq-local treesit-defun-type-regexp
+              (cons ocaml-ts-mode--defun-type-regexp
+                    #'ocaml-ts-mode--defun-pred))
   (setq-local treesit-defun-name-function nil)
 
   ;; Font-lock.
