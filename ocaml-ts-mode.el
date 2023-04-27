@@ -175,25 +175,60 @@
 
 (defvar ocaml-ts-mode--defun-type-regexp
   (regexp-opt '("type_binding"
+                "exception_definition"
+                "external"
                 "let_binding"
                 "value_specification"
-                "module_binding"
-                "module_type_definition"
-                "class_binding"
-                "class_type_binding"
                 "method_definition"
                 "method_specification"
                 "instance_variable_definition"
                 "instance_variable_specification"
-                "external"))
-  "Regex used to fund defun-like nodes.")
+                "module_binding"
+                "module_type_definition"
+                "class_binding"
+                "class_type_binding"))
+  "Regex used to find defun-like nodes.")
 
-(defun ocaml-ts-mode--defun-pred (node)
+(defun ocaml-ts-mode--defun-valid-p (node)
   "Predicate to check if NODE is really defun-like."
-  (not (when-let ((node (treesit-node-parent node))
-                  (node (treesit-node-parent node))
-                  (type (treesit-node-type node)))
-         (string-equal type "let_expression"))))
+  (and (treesit-node-check node 'named)
+       (not (treesit-node-top-level
+             node (regexp-opt '("let_expression"
+                                "parenthesized_module_expression"
+                                "package_expression")
+                              'symbols)))))
+
+(defun ocaml-ts-mode--defun-name (node)
+  "Return the defun name of NODE.
+Return nil if there is no name or if NODE is not a defun node."
+  (pcase (treesit-node-type node)
+    ((or "type_binding"
+         "method_definition"
+         "instance_variable_definition"
+         "module_binding"
+         "module_type_definition"
+         "class_binding"
+         "class_type_binding")
+     (treesit-node-text
+      (treesit-node-child-by-field-name node "name") t))
+    ("exception_definition"
+     (treesit-node-text
+      (treesit-search-subtree node "constructor_name" nil nil 2) t))
+    ("external"
+     (treesit-node-text
+      (treesit-search-subtree node "value_name" nil nil 1) t))
+    ("let_binding"
+     (treesit-node-text
+      (treesit-node-child-by-field-name node "pattern") t))
+    ("value_specification"
+     (treesit-node-text
+      (treesit-search-subtree node "value_name" nil nil 1) t))
+    ("method_specification"
+     (treesit-node-text
+      (treesit-search-subtree node "method_name" nil nil 1) t))
+    ("instance_variable_specification"
+     (treesit-node-text
+      (treesit-search-subtree node "instance_variable_name" nil nil 1) t))))
 
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
@@ -215,8 +250,8 @@
   ;; Navigation.
   (setq-local treesit-defun-type-regexp
               (cons ocaml-ts-mode--defun-type-regexp
-                    #'ocaml-ts-mode--defun-pred))
-  (setq-local treesit-defun-name-function nil)
+                    #'ocaml-ts-mode--defun-valid-p))
+  (setq-local treesit-defun-name-function #'ocaml-ts-mode--defun-name)
 
   ;; Font-lock.
   (setq-local treesit-font-lock-settings
@@ -251,8 +286,8 @@
   ;; Navigation.
   (setq-local treesit-defun-type-regexp
               (cons ocaml-ts-mode--defun-type-regexp
-                    #'ocaml-ts-mode--defun-pred))
-  (setq-local treesit-defun-name-function nil)
+                    #'ocaml-ts-mode--defun-valid-p))
+  (setq-local treesit-defun-name-function #'ocaml-ts-mode--defun-name)
 
   ;; Font-lock.
   (setq-local treesit-font-lock-settings
