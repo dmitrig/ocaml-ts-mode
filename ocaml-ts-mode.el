@@ -174,13 +174,13 @@
      (module_type_name) @font-lock-type-face)))
 
 (defvar ocaml-ts-mode--defun-type-regexp
-  (regexp-opt '("type_definition"
-                "value_definition"
+  (regexp-opt '("type_binding"
+                "let_binding"
                 "value_specification"
-                "module_definition"
+                "module_binding"
                 "module_type_definition"
-                "class_definition"
-                "class_type_definition"
+                "class_binding"
+                "class_type_binding"
                 "method_definition"
                 "method_specification"
                 "instance_variable_definition"
@@ -190,8 +190,10 @@
 
 (defun ocaml-ts-mode--defun-pred (node)
   "Predicate to check if NODE is really defun-like."
-  (not (string-equal (treesit-node-type (treesit-node-parent node))
-                     "let_expression")))
+  (not (when-let ((node (treesit-node-parent node))
+                  (node (treesit-node-parent node))
+                  (type (treesit-node-type node)))
+         (string-equal type "let_expression"))))
 
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
