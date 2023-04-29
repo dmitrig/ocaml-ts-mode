@@ -230,6 +230,38 @@ Return nil if there is no name or if NODE is not a defun node."
      (treesit-node-text
       (treesit-search-subtree node "instance_variable_name" nil nil 1) t))))
 
+(defun ocaml-ts-mode--imenu-name (node)
+  "Return qualified defun name of NODE."
+  (let ((name nil))
+    (while node
+      (when-let ((new-name (treesit-defun-name node)))
+        (if name
+            (setq name (concat new-name
+                               treesit-add-log-defun-delimiter
+                               name))
+          (setq name new-name)))
+      (setq node (treesit-node-parent node)))
+    name))
+
+;; TODO: could add constructors / fields
+(defvar ocaml-ts-mode--imenu-settings
+  `(("Type" "\\`type_binding\\'"
+     ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name)
+    ("Spec" "\\`\\(value_specification\\|method_specification\\)\\'"
+     ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name)
+    ("Exception" "\\`exception_definition\\'"
+     ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name)
+    ("Value" "\\`\\(let_binding\\|external\\)\\'"
+     ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name)
+    ("Method" "\\`\\(method_definition\\)\\'"
+     ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name)
+    ;; grouping module/class types under Type causes some weird nesting
+    ("Module" "\\`\\(module_binding\\|module_type_definition\\)\\'"
+     ocaml-ts-mode--defun-valid-p nil)
+    ("Class" "\\`\\(class_binding\\|class_type_binding\\)\\'"
+     ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name))
+  "Settings for `treesit-simple-imenu'.")
+
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
   "Major mode for editing OCaml, powered by tree-sitter."
@@ -262,7 +294,7 @@ Return nil if there is no name or if NODE is not a defun node."
                 (attribute builtin constant type)))
 
   ;; Imenu.
-  (setq-local treesit-simple-imenu-settings nil)
+  (setq-local treesit-simple-imenu-settings ocaml-ts-mode--imenu-settings)
 
   (treesit-major-mode-setup))
 
@@ -298,7 +330,7 @@ Return nil if there is no name or if NODE is not a defun node."
                 (attribute builtin constant type)))
 
   ;; Imenu.
-  (setq-local treesit-simple-imenu-settings nil)
+  (setq-local treesit-simple-imenu-settings ocaml-ts-mode--imenu-settings)
 
   (treesit-major-mode-setup))
 
