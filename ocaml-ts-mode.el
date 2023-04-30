@@ -262,6 +262,12 @@ Return nil if there is no name or if NODE is not a defun node."
      ocaml-ts-mode--defun-valid-p ocaml-ts-mode--imenu-name))
   "Settings for `treesit-simple-imenu'.")
 
+(defun ocaml-ts-mode--comment-setup ()
+  "Common locals for comments."
+  (setq-local comment-start "(* ")
+  (setq-local comment-end " *)")
+  (setq-local comment-start-skip "(\\*+[ \t]*"))
+
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
   "Major mode for editing OCaml, powered by tree-sitter."
@@ -274,7 +280,7 @@ Return nil if there is no name or if NODE is not a defun node."
   (treesit-parser-create 'ocaml)
 
   ;; Comments.
-  ;; TODO
+  (ocaml-ts-mode--comment-setup)
 
   ;; Indent.
   (setq-local treesit-simple-indent-rules ocaml-ts-mode--indent-rules)
@@ -310,7 +316,7 @@ Return nil if there is no name or if NODE is not a defun node."
   (treesit-parser-create 'ocaml-interface)
 
   ;; Comments.
-  ;; TODO
+  (ocaml-ts-mode--comment-setup)
 
   ;; Indent.
   (setq-local treesit-simple-indent-rules nil)
