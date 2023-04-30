@@ -268,6 +268,44 @@ Return nil if there is no name or if NODE is not a defun node."
   (setq-local comment-end " *)")
   (setq-local comment-start-skip "(\\*+[ \t]*"))
 
+(defvar ocaml-ts-mode--block-regex
+  (regexp-opt '("for_expression"
+                "while_expression"
+                "if_expression"
+                "fun_expression"
+                "match_expression"
+                "local_open_expression"
+                "coercion_expression"
+                "list_expression"
+                "parenthesized_expression"
+                "parenthesized_pattern"
+                "match_case"
+                "parameter"
+                "value_definition"
+                "value_specification"
+                "value_name"
+                "label_name"
+                "constructor_name"
+                "value_pattern"
+                "value_path"
+                "constructor_path"
+                "infix_operator"
+                "number" "boolean" "unit"
+                "type_definition"
+                "type_constructor"
+                "module_definition"
+                "module_path"
+                "signature"
+                "structure"
+                "string" "quoted_string" "character")
+              'symbols))
+
+(defun ocaml-ts-mode-forward-sexp (arg)
+  "Implement `forward-sexp-function'.ARG is passed to `treesit-end-of-thing'."
+  (if (< arg 0)
+      (treesit-beginning-of-thing ocaml-ts-mode--block-regex (- arg))
+    (treesit-end-of-thing ocaml-ts-mode--block-regex arg)))
+
 ;;;###autoload
 (define-derived-mode ocaml-ts-mode prog-mode "OCaml"
   "Major mode for editing OCaml, powered by tree-sitter."
@@ -286,6 +324,7 @@ Return nil if there is no name or if NODE is not a defun node."
   (setq-local treesit-simple-indent-rules ocaml-ts-mode--indent-rules)
 
   ;; Navigation.
+  (setq-local forward-sexp-function #'ocaml-ts-mode-forward-sexp)
   (setq-local treesit-defun-type-regexp
               (cons ocaml-ts-mode--defun-type-regexp
                     #'ocaml-ts-mode--defun-valid-p))
