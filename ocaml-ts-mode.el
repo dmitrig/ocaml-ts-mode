@@ -35,7 +35,7 @@
 (declare-function treesit-node-end "treesit.c")
 (declare-function treesit-query-compile "treesit.c")
 
-(defcustom ocaml-ts-mode-indent-offset 4
+(defcustom ocaml-ts-mode-indent-offset 2
   "Number of spaces for each indentation step in `ocaml-ts-mode'."
   :type 'integer
   :safe 'integerp
@@ -58,9 +58,67 @@
     st)
   "Syntax table for `ocaml-ts-mode'.")
 
-(defvar ocaml-ts-mode--indent-rules
-  `((ocaml))
-  "Tree-sitter indent rules.")
+(defun ocaml-ts-mode--grandparent-bol (_n parent &rest _)
+  "Anchor node to PARENT's parent bol."
+  (save-excursion
+    (goto-char (treesit-node-start (treesit-node-parent parent)))
+    (back-to-indentation)
+    (point)))
+
+(defun ocaml-ts-mode--indent-rules (language)
+  "Tree-sitter indent rules for LANGUAGE."
+  `((,language
+     ((node-is "do") parent-bol 0)
+     ((node-is "done") parent-bol 0)
+     ((node-is "sig") parent-bol 0)
+     ((node-is "struct") parent-bol 0)
+     ((node-is "end") parent-bol 0)
+     ((node-is "and") parent 0)
+     ((node-is "then") parent 0)
+     ((node-is "else") parent 0)
+     ((node-is ")") parent-bol 0)
+     ((and (node-is ";") (parent-is "array_expression")) parent 1)
+     ((node-is ";") parent 0)
+     ;; ((node-is "|]") prev-sibling ,(- ocaml-ts-mode-indent-offset))
+     ;; ((node-is "]") prev-sibling ,(- ocaml-ts-mode-indent-offset))
+     ((match "\\(]\\||]\\)" "\\(list\\|array\\)_expression" nil 2)
+      prev-sibling ,(- ocaml-ts-mode-indent-offset))
+     ((match "\\(]\\||]\\)" "\\(list\\|array\\)_expression" nil 1 1)
+      parent-bol 0)
+     ((node-is "}") parent 0)
+     ((parent-is "compilation_unit") column-0 0)
+     ;; expressions
+     ((parent-is "parenthesized_expression") parent-bol 0)
+     ((parent-is "if_expression") parent ocaml-ts-mode-indent-offset)
+     ((parent-is "then_clause") grand-parent ocaml-ts-mode-indent-offset)
+     ((parent-is "else_clause") grand-parent ocaml-ts-mode-indent-offset)
+     ((parent-is "let_binding") grand-parent ocaml-ts-mode-indent-offset)
+     ((parent-is "let_expression") parent-bol 0)
+     ((parent-is "value_definition") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "let_open_expression") parent-bol 0)
+     ((parent-is "let_module_expression") parent-bol 0)
+     ((parent-is "package_expression") parent-bol 0)
+     ((parent-is "module_binding") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "sequence_expression") parent-bol 0)
+     ((parent-is "fun_expression") parent-bol ocaml-ts-mode-indent-offset)
+     ;; TODO: should be anchored on previous match case
+     ((parent-is "function_expression") parent-bol 0)
+     ((parent-is "match_expression")parent-bol 0)
+     ((parent-is "do_clause") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "while_expression") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "for_expression") parent-bol 0)
+     ((parent-is "object_expression") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "infix_expression") parent 0)
+     ((match nil "\\(list\\|array\\)_expression" nil 1 1) parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "list_expression") prev-sibling 0)
+     ((parent-is "array_expression") prev-sibling 0)
+     ((parent-is "signature") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "structure") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "class_binding") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "class_type_binding") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "class_body_type") parent-bol ocaml-ts-mode-indent-offset)
+     ((parent-is "method_definition") parent-bol ocaml-ts-mode-indent-offset)
+    )))
 
 (defvar ocaml-ts-mode--keywords
   '("and" "as" "assert" "begin" "class" "constraint" "do" "done"
@@ -269,23 +327,27 @@ Return nil if there is no name or if NODE is not a defun node."
   (setq-local comment-start-skip "(\\*+[ \t]*"))
 
 (defvar ocaml-ts-mode--block-regex
-  (regexp-opt '("for_expression"
-                "while_expression"
-                "if_expression"
-                "fun_expression"
-                "match_expression"
+  (regexp-opt `(,@ocaml-ts-mode--keywords
+                "do_clause"
+                ;; "if_expression"
+                ;; "fun_expression"
+                ;; "match_expression"
                 "local_open_expression"
                 "coercion_expression"
+                "array_expression"
                 "list_expression"
                 "parenthesized_expression"
                 "parenthesized_pattern"
                 "match_case"
                 "parameter"
-                "value_definition"
+                ;; "value_definition"
+                "let_binding"
                 "value_specification"
                 "value_name"
                 "label_name"
                 "constructor_name"
+                "module_name"
+                "module_type_name"
                 "value_pattern"
                 "value_path"
                 "constructor_path"
@@ -293,7 +355,9 @@ Return nil if there is no name or if NODE is not a defun node."
                 "number" "boolean" "unit"
                 "type_definition"
                 "type_constructor"
-                "module_definition"
+                ;; "module_definition"
+                "package_expression"
+                "typed_module_expression"
                 "module_path"
                 "signature"
                 "structure"
@@ -321,7 +385,8 @@ Return nil if there is no name or if NODE is not a defun node."
   (ocaml-ts-mode--comment-setup)
 
   ;; Indent.
-  (setq-local treesit-simple-indent-rules ocaml-ts-mode--indent-rules)
+  (setq-local treesit-simple-indent-rules
+              (ocaml-ts-mode--indent-rules 'ocaml))
 
   ;; Navigation.
   (setq-local forward-sexp-function #'ocaml-ts-mode-forward-sexp)
@@ -358,7 +423,8 @@ Return nil if there is no name or if NODE is not a defun node."
   (ocaml-ts-mode--comment-setup)
 
   ;; Indent.
-  (setq-local treesit-simple-indent-rules nil)
+  (setq-local treesit-simple-indent-rules
+              (ocaml-ts-mode--indent-rules 'ocaml-interface))
 
   ;; Navigation.
   (setq-local treesit-defun-type-regexp
