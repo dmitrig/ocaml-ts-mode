@@ -58,67 +58,185 @@
     st)
   "Syntax table for `ocaml-ts-mode'.")
 
-(defun ocaml-ts-mode--grandparent-bol (_n parent &rest _)
-  "Anchor node to PARENT's parent bol."
-  (save-excursion
-    (goto-char (treesit-node-start (treesit-node-parent parent)))
-    (back-to-indentation)
-    (point)))
+(defvar ocaml-ts-mode--dedent-regexp
+  (concat "\\`"
+          (regexp-opt
+           '("and" "do" "done" "else" "end" "in" "then" "with"
+             ")" "]" "|]" "}" "," "<-" "|"))
+          "\\'")
+  "Keywords to be indented evenly with parent.")
+
+(defun ocaml-ts-mode--node-is (node type)
+  (string-match-p
+   type (or (treesit-node-type node) "")))
+
+(defun ocaml-ts-mode--head-type (node)
+  "Get type of node in head position of NODE."
+  (let (next)
+    (while (setq next (treesit-node-child node 0))
+      (setq node next))
+    (or (treesit-node-type node) "")))
+
+(defun ocaml-ts-mode--default-offset (&optional offset)
+  "Create OFFSET function for `treesit-simple-indent-rules'."
+  (lambda (node &rest _)
+    (or offset (setq offset 0))
+    (cond
+     ((ocaml-ts-mode--node-is node "infix_operator") offset)
+     ((string-match-p ocaml-ts-mode--dedent-regexp (ocaml-ts-mode--head-type node)) offset)
+     (t (+ ocaml-ts-mode-indent-offset offset)))))
+
+(defconst ocaml-ts-mode--types-regexp
+  (regexp-opt
+   '("type_variable"
+    "type_constructor_path"
+    "constructed_type"
+    ;; "polymorphic_variant_type"
+    ;; "package_type"
+    "hash_type"
+    ;; "object_type"
+    ;; "parenthesized_type"
+    "tuple_type"
+    "function_type"
+    "aliased_type")
+   'symbols)
+  "All node types in _type.")
+
+(defun ocaml-ts-mode--match-in-type (node &rest _)
+  "Matcher to test if NODE is in a type expression."
+  (string-match-p
+   ocaml-ts-mode--types-regexp
+   (or (treesit-node-type (treesit-node-parent node)) "")))
+
+(defun ocaml-ts-mode--anchor-toplevel-type (node &rest _)
+  "Get the top-most _type ancestor of NODE."
+  (while-let ((parent (treesit-node-parent node))
+              ((string-match-p
+                ocaml-ts-mode--types-regexp
+                (or (treesit-node-type parent) ""))))
+    (setq node parent))
+  (treesit-node-start node))
+
+(defconst ocaml-ts-mode--aux-regexp
+  (regexp-opt
+   '("then_clause" "else_clause"  ; always in if_expression
+     "do_clause"                  ; for_expression or while_expression
+     ;; "binding" expressions: always in corresponding definition
+     "let_binding"                ; value_definition (let _ = _)
+     "module_binding"
+     "class_binding" "class_type_binding"
+     "type_binding"
+     ;; align to enclosing type definition: not sure about other type decls
+     "variant_declaration")
+   'symbols)
+  "Syntax nodes to be skipped when looking for parent nodes.")
+
+(defun ocaml-ts-mode--parent-mod (node type)
+  "Get parent of NODE modulo ignored node TYPE."
+  (let ((parent (treesit-node-parent node)))
+    (while (string-match-p type (or (treesit-node-type parent) ""))
+      (setq parent (treesit-node-parent parent)))
+    parent))
+
+(defun ocaml-ts-mode--anchor-parent (node &rest _)
+  (when-let ((parent (ocaml-ts-mode--parent-mod
+                      node
+                      ocaml-ts-mode--aux-regexp)))
+    (treesit-node-start parent)))
+
+(defconst ocaml-ts-mode--dangleable-regexp
+  (regexp-opt
+   '("structure"
+     "signature"
+     "class_body_type"
+     "class_body_type"
+     "object_expression"
+     "fun_expression"
+     "function_expression"
+     "match_expression"
+     "try_expression"
+     "parenthesized_expression"
+     "list_expression"
+     "array_expression"
+     "record_expression"
+     "object_copy_expression"
+     "record_declaration")
+   'symbols))
+
+(defconst ocaml-ts-mode--dangle-open-regexp
+  (concat "\\`"
+          (regexp-opt '("struct" "sig" "object"
+                        "->" "function" "with"
+                        "(" "[" "[|" "{" "{<"))
+          "\\'")
+  "Dangling expression \"openers\".")
+
+(defun ocaml-ts-mode--dangling-p (node)
+  "Check if a NODE is a \"dangling opener\"."
+  (and (string-match-p ocaml-ts-mode--dangle-open-regexp
+                       (treesit-node-type node))
+       (save-excursion
+         (goto-char (treesit-node-start (treesit-node-parent node)))
+         ;; node not on its own line
+         (not (looking-back (rx bol (* whitespace))
+                            (line-beginning-position))))))
+
+(defun ocaml-ts-mode--match-dangling-parent (_n parent &rest _)
+  (string-match-p ocaml-ts-mode--dangleable-regexp
+                  (treesit-node-type parent)))
+
+(defun ocaml-ts-mode--parent-same-line (node type)
+  (when-let* ((line (line-number-at-pos (treesit-node-start node)))
+              (parent (ocaml-ts-mode--parent-mod node type))
+              (pline (line-number-at-pos (treesit-node-start parent)))
+             ((= pline line)))
+    parent))
+
+(defun ocaml-ts-mode--anchor-dangleable-parent (node &rest _)
+  (catch 'term
+    (let ((opener node))
+      (while (setq opener (treesit-node-prev-sibling opener))
+        (when (ocaml-ts-mode--dangling-p opener)
+          ;; found the node of the anchor line
+          (let ((parent (treesit-node-parent opener))
+                (n 0))
+            (while-let ((gp (ocaml-ts-mode--parent-same-line
+                             parent ocaml-ts-mode--aux-regexp)))
+              (setq parent gp)
+              (setq n (1+ n)))
+            (let ((start (+ (* n ocaml-ts-mode-indent-offset)
+                            (treesit-node-start parent))))
+              ;; TODO: remove; for debugging
+              (pulse-momentary-highlight-region
+               (treesit-node-start parent) start)
+              (throw 'term start))))))
+    (let ((parent (ocaml-ts-mode--parent-mod
+                   node ocaml-ts-mode--aux-regexp)))
+      (treesit-node-start parent))))
 
 (defun ocaml-ts-mode--indent-rules (language)
-  "Tree-sitter indent rules for LANGUAGE."
-  `((,language
-     ((node-is "do") parent-bol 0)
-     ((node-is "done") parent-bol 0)
-     ((node-is "sig") parent-bol 0)
-     ((node-is "struct") parent-bol 0)
-     ((node-is "end") parent-bol 0)
-     ((node-is "and") parent 0)
-     ((node-is "then") parent 0)
-     ((node-is "else") parent 0)
-     ((node-is ")") parent-bol 0)
-     ((and (node-is ";") (parent-is "array_expression")) parent 1)
-     ((node-is ";") parent 0)
-     ;; ((node-is "|]") prev-sibling ,(- ocaml-ts-mode-indent-offset))
-     ;; ((node-is "]") prev-sibling ,(- ocaml-ts-mode-indent-offset))
-     ((match "\\(]\\||]\\)" "\\(list\\|array\\)_expression" nil 2)
-      prev-sibling ,(- ocaml-ts-mode-indent-offset))
-     ((match "\\(]\\||]\\)" "\\(list\\|array\\)_expression" nil 1 1)
-      parent-bol 0)
-     ((node-is "}") parent 0)
-     ((parent-is "compilation_unit") column-0 0)
-     ;; expressions
-     ((parent-is "parenthesized_expression") parent-bol 0)
-     ((parent-is "if_expression") parent ocaml-ts-mode-indent-offset)
-     ((parent-is "then_clause") grand-parent ocaml-ts-mode-indent-offset)
-     ((parent-is "else_clause") grand-parent ocaml-ts-mode-indent-offset)
-     ((parent-is "let_binding") grand-parent ocaml-ts-mode-indent-offset)
-     ((parent-is "let_expression") parent-bol 0)
-     ((parent-is "value_definition") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "let_open_expression") parent-bol 0)
-     ((parent-is "let_module_expression") parent-bol 0)
-     ((parent-is "package_expression") parent-bol 0)
-     ((parent-is "module_binding") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "sequence_expression") parent-bol 0)
-     ((parent-is "fun_expression") parent-bol ocaml-ts-mode-indent-offset)
-     ;; TODO: should be anchored on previous match case
-     ((parent-is "function_expression") parent-bol 0)
-     ((parent-is "match_expression")parent-bol 0)
-     ((parent-is "do_clause") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "while_expression") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "for_expression") parent-bol 0)
-     ((parent-is "object_expression") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "infix_expression") parent 0)
-     ((match nil "\\(list\\|array\\)_expression" nil 1 1) parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "list_expression") prev-sibling 0)
-     ((parent-is "array_expression") prev-sibling 0)
-     ((parent-is "signature") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "structure") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "class_binding") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "class_type_binding") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "class_body_type") parent-bol ocaml-ts-mode-indent-offset)
-     ((parent-is "method_definition") parent-bol ocaml-ts-mode-indent-offset)
-    )))
+  (let ((_log 'ocaml-ts-mode--log-anchor)
+        (in-type 'ocaml-ts-mode--match-in-type)
+        ;; (parent 'ocaml-ts-mode--anchor-parent)
+        (dangle-parent 'ocaml-ts-mode--anchor-dangleable-parent)
+        (top-type 'ocaml-ts-mode--anchor-toplevel-type)
+        ;; (ofs ocaml-ts-mode-indent-offset)
+        (default-ofs 'ocaml-ts-mode--default-offset))
+    `((,language
+       ((parent-is "compilation_unit") column-0 0)
+
+       ;; indent children after "dangling opener"
+       ;; (,dangling ,dangle-parent (,default-ofs))
+
+       ;; align types evenly with top-level _type expr
+       (,in-type ,top-type 0)
+
+       ;; "special" expressions without indentation
+       ((match nil "let_expression" nil 2) parent 0)
+       ((match nil "let_\\(open\\|exception\\|module\\)_expression" nil 3) parent 0)
+       ((parent-is "sequence_expression") parent 0)
+
+       (catch-all ,dangle-parent (,default-ofs))))))
 
 (defvar ocaml-ts-mode--keywords
   '("and" "as" "assert" "begin" "class" "constraint" "do" "done"
@@ -215,6 +333,11 @@
      (method_invocation "#" @font-lock-operator-face)
      (infix_operator) @font-lock-operator-face
      (prefix_operator) @font-lock-operator-face)
+
+   ;; :language language
+   ;; :feature 'type
+   ;; :override t
+   ;; '((_expression) @custom-invalid)
 
    :language language
    :feature 'type
