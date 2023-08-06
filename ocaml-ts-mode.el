@@ -300,7 +300,12 @@ List taken directly from https://v2.ocaml.org/manual/lex.html.")
      ;; signatures and misc
      (instance_variable_name) @font-lock-variable-name-face
      (value_specification (value_name) @font-lock-variable-name-face)
-     (external (value_name) @font-lock-variable-name-face))
+     (external (value_name) @font-lock-variable-name-face)
+     ;; assignment of bindings in various circumstances
+     (type_binding ["="] @font-lock-keyword-face)
+     (let_binding ["="] @font-lock-keyword-face)
+     (field_expression ["="] @font-lock-keyword-face)
+     (for_expression ["="] @font-lock-keyword-face))
 
    :language language
    :feature 'keyword
