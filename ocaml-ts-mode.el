@@ -1,4 +1,4 @@
-;;; ocaml-ts-mode.el --- tree-sitter support for OCaml  -*- lexical-binding: t; -*-
+;;; ocaml-ts-mode.el --- Major mode for OCaml using tree-sitter  -*- lexical-binding: t; -*-
 
 ;; Version: 0.1.0
 ;; Author: dmitrig
