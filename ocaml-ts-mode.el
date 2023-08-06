@@ -325,6 +325,11 @@ List taken directly from https://v2.ocaml.org/manual/lex.html.")
    '([(string) (quoted_string) (character)] @font-lock-string-face)
 
    :language language
+   :feature 'number
+   :override t
+   '((number) @font-lock-number-face)
+
+   :language language
    :feature 'builtin
    `([";;"] @font-lock-preprocessor-face
      ((value_path :anchor (value_name) @font-lock-builtin-face)
@@ -533,7 +538,7 @@ Return nil if there is no name or if NODE is not a defun node."
               (ocaml-ts-mode--font-lock-settings 'ocaml))
   (setq-local treesit-font-lock-feature-list
               '((comment definition)
-                (keyword string)
+                (keyword string number)
                 (attribute builtin constant type)))
 
   ;; Imenu.
