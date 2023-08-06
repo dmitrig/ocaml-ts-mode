@@ -238,14 +238,19 @@
 
        (catch-all ,dangle-parent (,default-ofs))))))
 
-(defvar ocaml-ts-mode--keywords
-  '("and" "as" "assert" "begin" "class" "constraint" "do" "done"
-    "downto" "else" "end" "exception" "external" "for" "fun"
-    "function" "functor" "if" "in" "include" "inherit" "initializer"
-    "lazy" "let" "match" "method" "module" "mutable" "new" "nonrec"
-    "object" "of" "open" "private" "rec" "sig" "struct" "then" "to"
-    "try" "type" "val" "virtual" "when" "while" "with")
-  "OCaml keywords for tree-sitter font-locking.")
+(defvar ocaml-ts-mode--keywords (string-split "
+  and         as          assert      asr         begin       class
+  constraint  do          done        downto      else        end
+  exception   external    false       for         fun         function
+  functor     if          in          include     inherit     initializer
+  land        lazy        let         lor         lsl         lsr
+  lxor        match       method      mod         module      mutable
+  new         nonrec      object      of          open        or
+  private     rec         sig         struct      then        to
+  true        try         type        val         virtual     when
+  while       with")
+  "OCaml keywords for tree-sitter font-locking.
+List taken directly from https://v2.ocaml.org/manual/lex.html.")
 
 (defvar ocaml-ts-mode--constants
   '((unit) "true" "false")
