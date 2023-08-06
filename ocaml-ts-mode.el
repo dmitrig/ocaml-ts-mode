@@ -89,16 +89,16 @@
 (defconst ocaml-ts-mode--types-regexp
   (regexp-opt
    '("type_variable"
-    "type_constructor_path"
-    "constructed_type"
-    ;; "polymorphic_variant_type"
-    ;; "package_type"
-    "hash_type"
-    ;; "object_type"
-    ;; "parenthesized_type"
-    "tuple_type"
-    "function_type"
-    "aliased_type")
+     "type_constructor_path"
+     "constructed_type"
+     ;; "polymorphic_variant_type"
+     ;; "package_type"
+     "hash_type"
+     ;; "object_type"
+     ;; "parenthesized_type"
+     "tuple_type"
+     "function_type"
+     "aliased_type")
    'symbols)
   "All node types in _type.")
 
@@ -189,7 +189,7 @@
   (when-let* ((line (line-number-at-pos (treesit-node-start node)))
               (parent (ocaml-ts-mode--parent-mod node type))
               (pline (line-number-at-pos (treesit-node-start parent)))
-             ((= pline line)))
+              ((= pline line)))
     parent))
 
 (defun ocaml-ts-mode--anchor-dangleable-parent (node &rest _)
@@ -343,16 +343,16 @@
    :feature 'type
    '([(type_constructor) (type_variable) (hash_type)
       (class_name) (class_type_name)] @font-lock-type-face
-     (function_type "->" @font-lock-type-face)
-     (tuple_type "*" @font-lock-type-face)
-     (polymorphic_variant_type ["[>" "[<" ">" "|" "[" "]"] @font-lock-type-face)
-     (object_type ["<" ">" ";" ".."] @font-lock-type-face)
-     (constructor_declaration ["->" "*"] @font-lock-type-face)
-     (record_declaration ["{" "}" ";"] @font-lock-type-face)
-     (parenthesized_type ["(" ")"] @font-lock-type-face)
-     (polymorphic_type "." @font-lock-type-face)
-     (module_name) @font-lock-type-face
-     (module_type_name) @font-lock-type-face)))
+      (function_type "->" @font-lock-type-face)
+      (tuple_type "*" @font-lock-type-face)
+      (polymorphic_variant_type ["[>" "[<" ">" "|" "[" "]"] @font-lock-type-face)
+      (object_type ["<" ">" ";" ".."] @font-lock-type-face)
+      (constructor_declaration ["->" "*"] @font-lock-type-face)
+      (record_declaration ["{" "}" ";"] @font-lock-type-face)
+      (parenthesized_type ["(" ")"] @font-lock-type-face)
+      (polymorphic_type "." @font-lock-type-face)
+      (module_name) @font-lock-type-face
+      (module_type_name) @font-lock-type-face)))
 
 (defvar ocaml-ts-mode--defun-type-regexp
   (regexp-opt '("type_binding"
