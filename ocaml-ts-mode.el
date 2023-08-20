@@ -1,4 +1,4 @@
-;;; ocaml-ts-mode.el --- tree-sitter support for OCaml  -*- lexical-binding: t; -*-
+;;; ocaml-ts-mode.el --- Major mode for OCaml using tree-sitter  -*- lexical-binding: t; -*-
 
 ;; Version: 0.1.0
 ;; Author: dmitrig
@@ -89,16 +89,16 @@
 (defconst ocaml-ts-mode--types-regexp
   (regexp-opt
    '("type_variable"
-    "type_constructor_path"
-    "constructed_type"
-    ;; "polymorphic_variant_type"
-    ;; "package_type"
-    "hash_type"
-    ;; "object_type"
-    ;; "parenthesized_type"
-    "tuple_type"
-    "function_type"
-    "aliased_type")
+     "type_constructor_path"
+     "constructed_type"
+     ;; "polymorphic_variant_type"
+     ;; "package_type"
+     "hash_type"
+     ;; "object_type"
+     ;; "parenthesized_type"
+     "tuple_type"
+     "function_type"
+     "aliased_type")
    'symbols)
   "All node types in _type.")
 
@@ -189,7 +189,7 @@
   (when-let* ((line (line-number-at-pos (treesit-node-start node)))
               (parent (ocaml-ts-mode--parent-mod node type))
               (pline (line-number-at-pos (treesit-node-start parent)))
-             ((= pline line)))
+              ((= pline line)))
     parent))
 
 (defun ocaml-ts-mode--anchor-dangleable-parent (node &rest _)
@@ -239,13 +239,22 @@
        (catch-all ,dangle-parent (,default-ofs))))))
 
 (defvar ocaml-ts-mode--keywords
-  '("and" "as" "assert" "begin" "class" "constraint" "do" "done"
-    "downto" "else" "end" "exception" "external" "for" "fun"
-    "function" "functor" "if" "in" "include" "inherit" "initializer"
-    "lazy" "let" "match" "method" "module" "mutable" "new" "nonrec"
-    "object" "of" "open" "private" "rec" "sig" "struct" "then" "to"
-    "try" "type" "val" "virtual" "when" "while" "with")
-  "OCaml keywords for tree-sitter font-locking.")
+  (let ((infix-operators '("asr" "land" "lor" "lsl" "lsr" "lxor" "or" "mod")))
+    (seq-remove (lambda (k) (seq-position infix-operators k))
+                (string-split "
+  and         as          assert      asr         begin       class
+  constraint  do          done        downto      else        end
+  exception   external    false       for         fun         function
+  functor     if          in          include     inherit     initializer
+  land        lazy        let         lor         lsl         lsr
+  lxor        match       method      mod         module      mutable
+  new         nonrec      object      of          open        or
+  private     rec         sig         struct      then        to
+  true        try         type        val         virtual     when
+  while       with")))
+  "OCaml keywords for tree-sitter font-locking.
+List taken directly from https://v2.ocaml.org/manual/lex.html.
+Infix operators are parsed and fontified separately.")
 
 (defvar ocaml-ts-mode--constants
   '((unit) "true" "false")
@@ -295,7 +304,12 @@
      ;; signatures and misc
      (instance_variable_name) @font-lock-variable-name-face
      (value_specification (value_name) @font-lock-variable-name-face)
-     (external (value_name) @font-lock-variable-name-face))
+     (external (value_name) @font-lock-variable-name-face)
+     ;; assignment of bindings in various circumstances
+     (type_binding ["="] @font-lock-keyword-face)
+     (let_binding ["="] @font-lock-keyword-face)
+     (field_expression ["="] @font-lock-keyword-face)
+     (for_expression ["="] @font-lock-keyword-face))
 
    :language language
    :feature 'keyword
@@ -313,6 +327,11 @@
    :feature 'string
    :override t
    '([(string) (quoted_string) (character)] @font-lock-string-face)
+
+   :language language
+   :feature 'number
+   :override t
+   '((number) @font-lock-number-face)
 
    :language language
    :feature 'builtin
@@ -343,16 +362,16 @@
    :feature 'type
    '([(type_constructor) (type_variable) (hash_type)
       (class_name) (class_type_name)] @font-lock-type-face
-     (function_type "->" @font-lock-type-face)
-     (tuple_type "*" @font-lock-type-face)
-     (polymorphic_variant_type ["[>" "[<" ">" "|" "[" "]"] @font-lock-type-face)
-     (object_type ["<" ">" ";" ".."] @font-lock-type-face)
-     (constructor_declaration ["->" "*"] @font-lock-type-face)
-     (record_declaration ["{" "}" ";"] @font-lock-type-face)
-     (parenthesized_type ["(" ")"] @font-lock-type-face)
-     (polymorphic_type "." @font-lock-type-face)
-     (module_name) @font-lock-type-face
-     (module_type_name) @font-lock-type-face)))
+      (function_type "->" @font-lock-type-face)
+      (tuple_type "*" @font-lock-type-face)
+      (polymorphic_variant_type ["[>" "[<" ">" "|" "[" "]"] @font-lock-type-face)
+      (object_type ["<" ">" ";" ".."] @font-lock-type-face)
+      (constructor_declaration ["->" "*"] @font-lock-type-face)
+      (record_declaration ["{" "}" ";"] @font-lock-type-face)
+      (parenthesized_type ["(" ")"] @font-lock-type-face)
+      (polymorphic_type "." @font-lock-type-face)
+      (module_name) @font-lock-type-face
+      (module_type_name) @font-lock-type-face)))
 
 (defvar ocaml-ts-mode--defun-type-regexp
   (regexp-opt '("type_binding"
@@ -523,7 +542,7 @@ Return nil if there is no name or if NODE is not a defun node."
               (ocaml-ts-mode--font-lock-settings 'ocaml))
   (setq-local treesit-font-lock-feature-list
               '((comment definition)
-                (keyword string)
+                (keyword string number)
                 (attribute builtin constant type)))
 
   ;; Imenu.
