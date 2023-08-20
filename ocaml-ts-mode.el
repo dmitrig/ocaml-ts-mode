@@ -238,7 +238,10 @@
 
        (catch-all ,dangle-parent (,default-ofs))))))
 
-(defvar ocaml-ts-mode--keywords (string-split "
+(defvar ocaml-ts-mode--keywords
+  (let ((infix-operators '("asr" "land" "lor" "lsl" "lsr" "lxor" "or" "mod")))
+    (seq-remove (lambda (k) (seq-position infix-operators k))
+                (string-split "
   and         as          assert      asr         begin       class
   constraint  do          done        downto      else        end
   exception   external    false       for         fun         function
@@ -248,9 +251,10 @@
   new         nonrec      object      of          open        or
   private     rec         sig         struct      then        to
   true        try         type        val         virtual     when
-  while       with")
+  while       with")))
   "OCaml keywords for tree-sitter font-locking.
-List taken directly from https://v2.ocaml.org/manual/lex.html.")
+List taken directly from https://v2.ocaml.org/manual/lex.html.
+Infix operators are parsed and fontified separately.")
 
 (defvar ocaml-ts-mode--constants
   '((unit) "true" "false")
